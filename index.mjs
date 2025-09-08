@@ -1,4 +1,5 @@
 import { Pool } from "pg";
+import cloudinary from "cloudinary";
 
 const pool = new Pool({
   host: process.env.DB_HOST,
@@ -9,7 +10,38 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false },
 });
 
-// 处理帖子列表
+// configure Cloudinary
+cloudinary.v2.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
+
+// ========= Update upload image logic =========
+async function uploadImage(event) {
+  try {
+    const body = JSON.parse(event.body);
+    const file = body.file; // base64 or URL
+
+    const result = await cloudinary.v2.uploader.upload(file, {
+      folder: "items", // store to Cloudinary items/ folder
+    });
+
+    return {
+      statusCode: 200,
+      headers: { "Access-Control-Allow-Origin": "*" },
+      body: JSON.stringify(result), // including secure_url, public_id 等
+    };
+  } catch (err) {
+    console.error("Upload error:", err);
+    return {
+      statusCode: 500,
+      body: JSON.stringify({ error: err.message }),
+    };
+  }
+}
+
+// handle posts list
 async function getPosts() {
   const client = await pool.connect();
   try {
@@ -26,7 +58,7 @@ async function getPosts() {
   }
 }
 
-// 创建帖子
+// create post
 async function createPost(event) {
   const client = await pool.connect();
   try {
@@ -57,7 +89,7 @@ async function createPost(event) {
   }
 }
 
-// 获取单个帖子详情
+// get post detail
 async function getPostDetail(postId) {
   const client = await pool.connect();
   try {
@@ -78,7 +110,7 @@ async function getPostDetail(postId) {
   }
 }
 
-// 回复帖子
+// create response
 async function createResponse(event) {
   const client = await pool.connect();
   try {
@@ -98,7 +130,7 @@ async function createResponse(event) {
   }
 }
 
-// 主处理函数
+// main handler
 export const handler = async (event) => {
   console.log("Incoming event:", event);
 
