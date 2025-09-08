@@ -137,14 +137,16 @@ export const handler = async (event) => {
   const { httpMethod, path, pathParameters } = event;
 
   try {
-    if (httpMethod === "GET" && path === "/posts") {
+    if (httpMethod === "POST" && path.endsWith("/upload")) {
+      return await uploadImage(event);
+    } else if (httpMethod === "GET" && path.endsWith ("/posts")) {
       return await getPosts();
-    } else if (httpMethod === "POST" && path === "/posts") {
+    } else if (httpMethod === "POST" && path.endsWith ("/posts")) {
       return await createPost(event);
     } else if (httpMethod === "GET" && path.startsWith("/posts/")) {
       const postId = path.split("/")[2];
       return await getPostDetail(postId);
-    } else if (httpMethod === "POST" && path === "/responses") {
+    } else if (httpMethod === "POST" && path.endsWith ("/responses")) {
       return await createResponse(event);
     }
 
