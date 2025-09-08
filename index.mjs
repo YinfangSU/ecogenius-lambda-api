@@ -134,19 +134,19 @@ async function createResponse(event) {
 export const handler = async (event) => {
   console.log("Incoming event:", event);
 
-  const { httpMethod, path, pathParameters } = event;
+  const { httpMethod, rawPath, routeKey } = event;
 
   try {
-    if (httpMethod === "POST" && path.endsWith("/upload")) {
+    if (routeKey === "POST /upload") {
       return await uploadImage(event);
-    } else if (httpMethod === "GET" && path.endsWith ("/posts")) {
+    } else if (routeKey === "GET /posts") {
       return await getPosts();
-    } else if (httpMethod === "POST" && path.endsWith ("/posts")) {
+    } else if (routeKey === "POST /posts") {
       return await createPost(event);
-    } else if (httpMethod === "GET" && path.startsWith("/posts/")) {
-      const postId = path.split("/")[2];
+    } else if (routeKey === "GET /posts/{id}") {
+      const postId = event.pathParameters?.id;
       return await getPostDetail(postId);
-    } else if (httpMethod === "POST" && path.endsWith ("/responses")) {
+    } else if (routeKey === "POST /responses") {
       return await createResponse(event);
     }
 
