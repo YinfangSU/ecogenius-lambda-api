@@ -1,5 +1,6 @@
 import { Pool } from "pg";
 import cloudinary from "cloudinary";
+import OpenAI from "openai";
 
 const pool = new Pool({
   host: process.env.DB_HOST,
@@ -9,6 +10,37 @@ const pool = new Pool({
   port: 5432,
   ssl: { rejectUnauthorized: false },
 });
+
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY, // Lambda environment variable
+});
+
+async function analyzeImage(event) {
+  const body = JSON.parse(event.body);
+  const { prompt, file_urls } = body;
+
+  const response = await openai.chat.completions.create({
+    model: "gpt-4o",
+    messages: [
+      {
+        role: "user",
+        content: [
+          { type: "text", text: prompt },
+          {
+            type: "image_url",
+            image_url: { url: file_urls[0], detail: "high" },
+          },
+        ],
+      },
+    ],
+  });
+
+  return {
+    statusCode: 200,
+    headers: { "Access-Control-Allow-Origin": "*" },
+    body: JSON.stringify(response.choices[0].message.content),
+  };
+}
 
 // configure Cloudinary
 cloudinary.v2.config({
@@ -93,10 +125,9 @@ async function createPost(event) {
 async function getPostDetail(postId) {
   const client = await pool.connect();
   try {
-    const result = await client.query(
-      "SELECT * FROM posts WHERE id = $1",
-      [postId]
-    );
+    const result = await client.query("SELECT * FROM posts WHERE id = $1", [
+      postId,
+    ]);
     if (result.rows.length === 0) {
       return { statusCode: 404, body: JSON.stringify({ error: "Not found" }) };
     }
@@ -148,6 +179,8 @@ export const handler = async (event) => {
       return await getPostDetail(postId);
     } else if (routeKey === "POST /responses") {
       return await createResponse(event);
+    } else if (routeKey === "POST /analyze") {
+      return await analyzeImage(event);
     }
 
     return { statusCode: 404, body: JSON.stringify({ error: "Not Found" }) };
