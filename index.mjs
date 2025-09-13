@@ -1,7 +1,13 @@
+
+// Import PostgreSQL connection pool
 import { Pool } from "pg";
+// Import Cloudinary for image upload
 import cloudinary from "cloudinary";
+// Import OpenAI SDK for AI analysis
 import OpenAI from "openai";
 
+
+// Configure PostgreSQL connection pool
 const pool = new Pool({
   host: process.env.DB_HOST,
   user: process.env.DB_USER,
@@ -11,38 +17,59 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false },
 });
 
+
+// Configure OpenAI client
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY, // Lambda environment variable
 });
 
+
+// Call OpenAI API to analyze image and text
 async function analyzeImage(event) {
   const body = JSON.parse(event.body);
   const { prompt, file_urls } = body;
 
+  console.log("AnalyzeImage called with:", { prompt, file_urls });
+
+  // Build basic chat messages
+  const messages = [
+    {
+      role: "user",
+      content: [{ type: "text", text: prompt }],
+    },
+  ];  
+
+  // If there is an image, add image URL to the message
+  if (file_urls && file_urls.length > 0) {
+    messages[0].content.push({
+      type: "image_url",
+      image_url: { url: file_urls[0], detail: "high" },
+    });
+  }
+
+  // Call OpenAI chat.completions API
   const response = await openai.chat.completions.create({
     model: "gpt-4o",
-    messages: [
-      {
-        role: "user",
-        content: [
-          { type: "text", text: prompt },
-          {
-            type: "image_url",
-            image_url: { url: file_urls[0], detail: "high" },
-          },
-        ],
-      },
-    ],
+    messages,
   });
+
+  let content = response.choices[0].message.content;
+  console.log("OpenAI raw response:", JSON.stringify(response, null, 2));
+
+  // If the response starts with a code block, remove markdown wrappers
+  if (content.startsWith("```") ) {
+    content = content.replace(/```json\n?/, "").replace(/```$/, "").trim();
+  }
 
   return {
     statusCode: 200,
     headers: { "Access-Control-Allow-Origin": "*" },
-    body: JSON.stringify(response.choices[0].message.content),
+    body: content,
   };
 }
 
-// configure Cloudinary
+
+// Configure Cloudinary for image upload
 cloudinary.v2.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
   api_key: process.env.CLOUDINARY_API_KEY,
@@ -62,7 +89,7 @@ async function uploadImage(event) {
     return {
       statusCode: 200,
       headers: { "Access-Control-Allow-Origin": "*" },
-      body: JSON.stringify(result), // including secure_url, public_id 等
+      body: JSON.stringify(result), // including secure_url, public_id etc.
     };
   } catch (err) {
     console.error("Upload error:", err);
@@ -73,7 +100,8 @@ async function uploadImage(event) {
   }
 }
 
-// handle posts list
+
+// Get the latest 20 posts
 async function getPosts() {
   const client = await pool.connect();
   try {
@@ -90,7 +118,8 @@ async function getPosts() {
   }
 }
 
-// create post
+
+// Create a new post
 async function createPost(event) {
   const client = await pool.connect();
   try {
@@ -141,7 +170,8 @@ async function getPostDetail(postId) {
   }
 }
 
-// create response
+
+// Create a response to a post
 async function createResponse(event) {
   const client = await pool.connect();
   try {
@@ -161,7 +191,8 @@ async function createResponse(event) {
   }
 }
 
-// main handler
+
+// Lambda main entry, route to different handlers
 export const handler = async (event) => {
   console.log("Incoming event:", event);
 
@@ -169,20 +200,27 @@ export const handler = async (event) => {
 
   try {
     if (routeKey === "POST /upload") {
+  // Upload image
       return await uploadImage(event);
     } else if (routeKey === "GET /posts") {
+  // Get posts list
       return await getPosts();
     } else if (routeKey === "POST /posts") {
+  // Create new post
       return await createPost(event);
     } else if (routeKey === "GET /posts/{id}") {
+  // Get post detail
       const postId = event.pathParameters?.id;
       return await getPostDetail(postId);
     } else if (routeKey === "POST /responses") {
+  // Create response
       return await createResponse(event);
     } else if (routeKey === "POST /analyze") {
+  // AI analyze image and text
       return await analyzeImage(event);
     }
 
+  // Route not matched, return 404
     return { statusCode: 404, body: JSON.stringify({ error: "Not Found" }) };
   } catch (err) {
     console.error("Lambda error:", err);
