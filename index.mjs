@@ -79,9 +79,10 @@ async function uploadImage(event) {
   try {
     const body = JSON.parse(event.body);
     const file = body.file; // base64 or URL
+    const folder = body.folder || "items"; // Use provided folder or default to "items"
 
     const result = await cloudinary.v2.uploader.upload(file, {
-      folder: "items", // store to Cloudinary items/ folder
+      folder, // dynamically set folder
     });
 
     return {
@@ -191,6 +192,28 @@ async function createResponse(event) {
   }
 }
 
+// Get responses by postId
+async function getResponsesByPostId(postId) {
+  const client = await pool.connect();
+  try {
+    const result = await client.query(
+      `SELECT id, post_id, nickname, content, created_at
+       FROM responses
+       WHERE post_id = $1
+       ORDER BY created_at ASC`,
+      [postId]
+    );
+
+    return {
+      statusCode: 200,
+      headers: { "Access-Control-Allow-Origin": "*" },
+      body: JSON.stringify(result.rows),
+    };
+  } finally {
+    client.release();
+  }
+}
+
 // Lambda main entry, route to different handlers
 export const handler = async (event) => {
   console.log("Incoming event:", event);
@@ -217,6 +240,10 @@ export const handler = async (event) => {
     } else if (routeKey === "POST /analyze") {
       // AI analyze image and text
       return await analyzeImage(event);
+    } else if (routeKey === "GET /posts/{id}/responses") {
+      // Get responses by postId
+      const postId = event.pathParameters?.id;
+      return await getResponsesByPostId(postId);
     }
 
     // Route not matched, return 404
